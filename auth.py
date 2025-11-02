@@ -3,7 +3,8 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
@@ -22,6 +23,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 router = APIRouter(prefix="/auth", tags=["auth"])
+
 
 def get_db():
     db = SessionLocal()
@@ -79,3 +81,24 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+
+
+TOKEN_BLACKLIST = set()
+
+@router.post("/logout")
+def logout(authorization: Optional[str] = Header(None)):
+    """
+    Logout endpoint: client should send Authorization header with Bearer token.
+    This adds token string into in-memory blacklist.
+    """
+    if not authorization:
+        raise HTTPException(status_code=400, detail="Authorization header required")
+
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=400, detail="Invalid authorization header")
+
+    token = parts[1]
+    TOKEN_BLACKLIST.add(token)
+    return {"success": True, "message": "Logged out"}
